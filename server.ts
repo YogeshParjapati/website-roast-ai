@@ -9,15 +9,25 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Initialize Gemini SDK with telemetry header
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
+// Initialize Gemini SDK lazily with telemetry header
+let aiClient: GoogleGenAI | null = null;
+function getGenAI(): GoogleGenAI {
+  if (!aiClient) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key || key === "MY_GEMINI_API_KEY" || key.trim() === "") {
+      throw new Error("GEMINI_API_KEY environment variable is not configured. Please open the Secrets panel in AI Studio and add your API key.");
     }
+    aiClient = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
   }
-});
+  return aiClient;
+}
 
 app.use(express.json());
 
@@ -270,7 +280,7 @@ Ensure all array elements have highly custom, descriptive properties.`;
       ]
     };
 
-    const response = await ai.models.generateContent({
+    const response = await getGenAI().models.generateContent({
       model: "gemini-3.5-flash",
       contents: prompt,
       config: {
@@ -305,6 +315,22 @@ Ensure all array elements have highly custom, descriptive properties.`;
 
   } catch (err: any) {
     console.error("Roast error:", err);
+    const errMsg = String(err.message || err);
+    const isQuota = errMsg.includes("429") || 
+                    errMsg.includes("quota") || 
+                    errMsg.includes("RESOURCE_EXHAUSTED") || 
+                    errMsg.includes("limit") || 
+                    (err.status && String(err.status).includes("RESOURCE_EXHAUSTED"));
+    
+    if (isQuota) {
+      return res.status(429).json({
+        success: false,
+        quotaExceeded: true,
+        error: "Gemini API Quota Exceeded (429)",
+        details: "The Gemini API key has exceeded its rate limit or free-tier quota. You can wait a minute for the limit to reset, configure your own key in the AI Studio Secrets panel, or use our smart Client-Side Simulation Mode right now!"
+      });
+    }
+
     res.status(500).json({ 
       error: "Failed to generate website roast.", 
       details: err.message || String(err) 
