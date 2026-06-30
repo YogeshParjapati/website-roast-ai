@@ -1,0 +1,6 @@
+{
+  "name": "Website Roast AI",
+  "description": "Analyze and roast any website URL with custom AI insights, scoring UI, UX, speed, accessibility, SEO, design issues, and concrete suggestions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
